@@ -851,10 +851,9 @@
                         let dist = getDistanceToLineSegment(m.x, m.y, b.lastX, b.lastY, b.x, b.y);
                         
                         if (dist < m.radius + 5) {
-                            if (m.invuln <= 0) {
-                                createExplosion(m.x, m.y, 25);
-                                destroyMeteor(j);
-                            }
+                            // Machine gun bypasses immunity completely
+                            createExplosion(m.x, m.y, 25);
+                            destroyMeteor(j);
                             detonated = true;
                             break;
                         }
@@ -1178,7 +1177,7 @@
             ctx.shadowBlur = 0;
 
             // Render visible dashed machine gun radius limit
-            if ((gameState === 'PLAYING' || gameState === 'PAUSED') && activeWeapon === 'MACHINE_GUN' && continuousLaserTimer <= 0) {
+            if ((gameState === 'PLAYING' || gameState === 'PAUSED') && activeWeapon === 'MACHINE_GUN') {
                 ctx.save();
                 ctx.strokeStyle = theme.mg;
                 ctx.globalAlpha = 0.3;
@@ -1299,14 +1298,14 @@
 
             for (let l of lasers) {
                 ctx.strokeStyle = theme.laser;
-                ctx.lineWidth = 15 * (l.timer / l.maxTimer); 
+                ctx.lineWidth = 30 * (l.timer / l.maxTimer); 
                 ctx.beginPath();
                 ctx.moveTo(l.startX, l.startY);
                 ctx.lineTo(l.endX, l.endY);
                 ctx.stroke();
                 
                 ctx.strokeStyle = '#fff'; 
-                ctx.lineWidth = 6 * (l.timer / l.maxTimer); 
+                ctx.lineWidth = 12 * (l.timer / l.maxTimer); 
                 ctx.beginPath();
                 ctx.moveTo(l.startX, l.startY);
                 ctx.lineTo(l.endX, l.endY);
@@ -1317,14 +1316,14 @@
                 let l = currentContinuousBeam;
                 let intensity = 0.5 + Math.random() * 0.5;
                 ctx.strokeStyle = theme.laser;
-                ctx.lineWidth = 20 * intensity; 
+                ctx.lineWidth = 40 * intensity; 
                 ctx.beginPath();
                 ctx.moveTo(l.startX, l.startY);
                 ctx.lineTo(l.endX, l.endY);
                 ctx.stroke();
                 
                 ctx.strokeStyle = '#fff'; 
-                ctx.lineWidth = 10 * intensity; 
+                ctx.lineWidth = 20 * intensity; 
                 ctx.beginPath();
                 ctx.moveTo(l.startX, l.startY);
                 ctx.lineTo(l.endX, l.endY);
@@ -1333,15 +1332,17 @@
             
             for (let b of bullets) {
                 ctx.strokeStyle = theme.mg;
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
                 ctx.beginPath();
-                let len = 15;
+                let len = 25;
                 let speed = Math.hypot(b.vx, b.vy);
                 let nx = b.vx / speed;
                 let ny = b.vy / speed;
                 ctx.moveTo(b.x - nx * len, b.y - ny * len);
                 ctx.lineTo(b.x, b.y);
                 ctx.stroke();
+                ctx.lineCap = 'butt';
             }
 
             // Draw Weapon Mount and Pod
@@ -1385,7 +1386,7 @@
             for (let m of missiles) {
                 if (m.path.length > 1) {
                     ctx.strokeStyle = m.isCluster || m.isSwarmChild ? '#f00' : theme.trail; 
-                    ctx.lineWidth = m.isCluster ? 4 : 2; 
+                    ctx.lineWidth = m.isCluster || m.isSwarmChild ? 6 : 4; 
                     ctx.beginPath();
                     ctx.moveTo(m.path[0].x, m.path[0].y);
                     for (let i = 1; i < m.path.length; i++) {
@@ -1404,7 +1405,7 @@
                 }
                 ctx.rotate(mAngle);
                 
-                let size = m.isCluster ? 1.5 : 1;
+                let size = m.isCluster || m.isSwarmChild ? 2.5 : 1.8;
                 ctx.fillStyle = m.isCluster || m.isSwarmChild ? '#f00' : theme.fg;
                 ctx.fillRect(-6 * size, -2 * size, 10 * size, 4 * size);
                 ctx.beginPath();
