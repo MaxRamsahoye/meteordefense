@@ -1,0 +1,1594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meteor Defense</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='black'/><circle cx='50' cy='50' r='6' fill='%23add8e6'/></svg>">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+        }
+        canvas {
+            display: block;
+            border: none;
+            cursor: none;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Web Audio API Synthesizer System
+        const sfx = {
+            ctx: null,
+            noiseBuffer: null,
+            init() {
+                if (this.ctx) return;
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                const bufferSize = this.ctx.sampleRate;
+                this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const output = this.noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+            },
+            playInitTick() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(2000, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.02, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.05);
+                osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+            },
+            playMenuClick() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+                osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+            },
+            playGameStart() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.4);
+                osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+            },
+            playMG() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(80, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(10, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+                osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+            },
+            playLaser() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(900, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+                osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+            },
+            playMissile() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+                
+                const noiseSrc = this.ctx.createBufferSource();
+                noiseSrc.buffer = this.noiseBuffer;
+                const noiseGain = this.ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                noiseSrc.connect(noiseGain);
+                noiseGain.connect(this.ctx.destination);
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                noiseSrc.start();
+                osc.stop(this.ctx.currentTime + 0.4);
+                noiseSrc.stop(this.ctx.currentTime + 0.3);
+                
+                osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+                noiseSrc.onended = () => { noiseSrc.disconnect(); noiseGain.disconnect(); };
+            },
+            playTripleMissile() {
+                if (!this.ctx) return;
+                for (let i = 0; i < 3; i++) {
+                    setTimeout(() => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(500, this.ctx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.3);
+                        gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.3);
+                        osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+                    }, i * 60);
+                }
+            },
+            playExplosion(size) {
+                if (!this.ctx) return;
+                const dur = Math.min(0.6, size / 60); 
+                
+                const noiseSrc = this.ctx.createBufferSource();
+                noiseSrc.buffer = this.noiseBuffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1000 - Math.min(800, size * 10), this.ctx.currentTime);
+                
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur);
+                
+                noiseSrc.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noiseSrc.start();
+                noiseSrc.stop(this.ctx.currentTime + dur);
+                
+                const osc = this.ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(120 - Math.min(80, size), this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(10, this.ctx.currentTime + dur);
+                const oscGain = this.ctx.createGain();
+                oscGain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                oscGain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur);
+                osc.connect(oscGain);
+                oscGain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + dur);
+                
+                osc.onended = () => { osc.disconnect(); oscGain.disconnect(); };
+                noiseSrc.onended = () => { noiseSrc.disconnect(); filter.disconnect(); gain.disconnect(); };
+            },
+            playLevelUp() {
+                 if (!this.ctx) return;
+                 const freqs = [300, 400, 500, 600];
+                 freqs.forEach((f, i) => {
+                     const osc = this.ctx.createOscillator();
+                     const gain = this.ctx.createGain();
+                     osc.type = 'sine';
+                     osc.frequency.value = f;
+                     gain.gain.setValueAtTime(0, this.ctx.currentTime + i * 0.1);
+                     gain.gain.linearRampToValueAtTime(0.1, this.ctx.currentTime + i * 0.1 + 0.05);
+                     gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + i * 0.1 + 0.1);
+                     osc.connect(gain);
+                     gain.connect(this.ctx.destination);
+                     osc.start(this.ctx.currentTime + i * 0.1);
+                     osc.stop(this.ctx.currentTime + i * 0.1 + 0.1);
+                     osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+                 });
+            },
+            playGameOver() {
+                if (!this.ctx) return;
+                 const freqs = [300, 250, 200, 150];
+                 freqs.forEach((f, i) => {
+                     const osc = this.ctx.createOscillator();
+                     const gain = this.ctx.createGain();
+                     osc.type = 'sawtooth';
+                     osc.frequency.value = f;
+                     gain.gain.setValueAtTime(0, this.ctx.currentTime + i * 0.2);
+                     gain.gain.linearRampToValueAtTime(0.1, this.ctx.currentTime + i * 0.2 + 0.1);
+                     gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + i * 0.2 + 0.2);
+                     osc.connect(gain);
+                     gain.connect(this.ctx.destination);
+                     osc.start(this.ctx.currentTime + i * 0.2);
+                     osc.stop(this.ctx.currentTime + i * 0.2 + 0.2);
+                     osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+                 });
+            }
+        };
+
+        // Theme System
+        const theme = {
+            bg: '#000',
+            bgTrail: 'rgba(0, 0, 0, 0.4)',
+            fg: '#fff',
+            earth: '#002244',
+            earthLine: '#0055aa',
+            land: '#116622',
+            cone: 'rgba(20, 20, 40, 0.4)',
+            coneLine: 'rgba(50, 50, 150, 0.2)',
+            mlrsBase: '#555',
+            mlrsPod: '#777',
+            meteorSmall: '#888',
+            meteorMedium: '#999',
+            meteorLarge: '#aaa',
+            meteorXLarge: '#ccc',
+            meteorLine: '#ddd',
+            trail: '#777',
+            laser: '#0ff',
+            mg: '#fa0',
+            healthFill: '#f33',
+            healthEmpty: '#522',
+            overlay: 'rgba(0, 0, 0, 0.75)'
+        };
+
+        let width, height;
+        let earthRadius = 400; 
+        let player = null;
+        let stars = [];
+
+        function initStars() {
+            stars = [];
+            for(let i=0; i<150; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    size: Math.random() * 2,
+                    alpha: 0.5 + Math.random() * 0.5
+                });
+            }
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            if (player) {
+                player.x = width / 2;
+                player.y = height - 100;
+            }
+            initStars();
+        }
+        window.addEventListener('resize', resize);
+
+        // Meteor Level Configuration
+        const levelData = {
+            1: { totalScore: 10,  rates: {small: 120, medium: 0,  large: 0,   xlarge: 0}, speedMult: 0.8 },
+            2: { totalScore: 20,  rates: {small: 100, medium: 0,  large: 0,   xlarge: 0}, speedMult: 0.9 },
+            3: { totalScore: 35,  rates: {small: 90,  medium: 200, large: 0,   xlarge: 0}, speedMult: 1.0 },
+            4: { totalScore: 50,  rates: {small: 80,  medium: 160, large: 0,   xlarge: 0}, speedMult: 1.05 },
+            5: { totalScore: 70,  rates: {small: 70,  medium: 140, large: 300, xlarge: 0}, speedMult: 1.1 },
+            6: { totalScore: 90,  rates: {small: 60,  medium: 120, large: 250, xlarge: 0}, speedMult: 1.15 },
+            7: { totalScore: 110, rates: {small: 50,  medium: 100, large: 200, xlarge: 400}, speedMult: 1.2 },
+            8: { totalScore: 140, rates: {small: 45,  medium: 90,  large: 180, xlarge: 350}, speedMult: 1.25 },
+            9: { totalScore: 170, rates: {small: 40,  medium: 80,  large: 150, xlarge: 300}, speedMult: 1.3 },
+            10:{ totalScore: 200, rates: {small: 35,  medium: 70,  large: 120, xlarge: 250}, speedMult: 1.4 }
+        };
+
+        // Game States
+        let gameState = 'LOADING'; 
+        let loadTimer = 0;
+        const loadDuration = 100; 
+        
+        let lives = 10;
+        const maxLives = 10; 
+        let level = 1;
+        let selectedStartLevel = 1; 
+        
+        let levelBudget = 0;
+        let maxLevelBudget = 0;
+        let isIntermission = false;
+        let intermissionTimer = 0;
+
+        let shotsFired = 0;
+        let missileShotsFired = 0;
+        let laserShotsFired = 0;
+        let continuousLaserTimer = 0;
+        let currentContinuousBeam = null;
+        let frameCount = 0;
+        let levelFrames = 0; 
+        let barrierFlash = 0;
+        
+        let fireCooldown = 0;
+
+        // Weapon Modes
+        let activeWeapon = 'MISSILE'; 
+
+        // Mouse Tracker
+        const mouse = { x: 0, y: 0 };
+        let isMouseDown = false;
+
+        // Entities
+        let missiles = [];
+        let lasers = [];
+        let bullets = [];
+        let explosions = [];
+        let meteors = [];
+        let particles = [];
+
+        function getMenuLayout() {
+            let bw = 70, bh = 45, gap = 15;
+            let totalW = 5 * bw + 4 * gap;
+            let startX = width / 2 - totalW / 2;
+            let startY = height / 2;
+            return { bw, bh, gap, totalW, startX, startY };
+        }
+
+        function updateCursor() {
+            if (gameState === 'PLAYING' || gameState === 'PAUSED') {
+                canvas.style.cursor = 'none';
+            } else if (gameState === 'START_MENU') {
+                let layout = getMenuLayout();
+                let isHovering = false;
+                
+                for (let i = 0; i < 10; i++) {
+                    let row = Math.floor(i / 5);
+                    let col = i % 5;
+                    let bx = layout.startX + col * (layout.bw + layout.gap);
+                    let by = layout.startY + row * (layout.bh + layout.gap);
+                    if (mouse.x >= bx && mouse.x <= bx + layout.bw && mouse.y >= by && mouse.y <= by + layout.bh) {
+                        isHovering = true;
+                        break;
+                    }
+                }
+                canvas.style.cursor = isHovering ? 'pointer' : 'default';
+            } else {
+                canvas.style.cursor = 'default';
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            sfx.init(); 
+            
+            if (gameState === 'START_MENU') {
+                if (e.code.startsWith('Digit')) {
+                    let num = e.key;
+                    let n = parseInt(num);
+                    if (n === 0) n = 10;
+                    selectedStartLevel = n;
+                }
+
+                if (e.code === 'Space' || e.code === 'Enter') {
+                    sfx.playGameStart();
+                    resetGame();
+                    initLevel(selectedStartLevel);
+                    gameState = 'PLAYING';
+                    return;
+                }
+            }
+
+            if (gameState === 'PLAYING' || gameState === 'PAUSED') {
+                if (e.code === 'KeyQ') {
+                    if (activeWeapon === 'MISSILE') activeWeapon = 'LASER';
+                    else if (activeWeapon === 'LASER') activeWeapon = 'MACHINE_GUN';
+                    else activeWeapon = 'MISSILE';
+                }
+
+                if (e.code === 'Digit1') activeWeapon = 'MISSILE';
+                if (e.code === 'Digit2') activeWeapon = 'LASER';
+                if (e.code === 'Digit3') activeWeapon = 'MACHINE_GUN';
+            }
+            
+            if (e.code === 'KeyP') {
+                if (gameState === 'PLAYING') gameState = 'PAUSED';
+                else if (gameState === 'PAUSED') gameState = 'PLAYING';
+            }
+            
+            if (e.code === 'Escape') {
+                if (gameState === 'PLAYING' || gameState === 'PAUSED' || gameState === 'GAME_OVER' || gameState === 'GAME_CLEARED') {
+                    resetGame();
+                    gameState = 'START_MENU';
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            sfx.init();
+            isMouseDown = true;
+            
+            if (gameState === 'START_MENU') {
+                let layout = getMenuLayout();
+                for (let i = 0; i < 10; i++) {
+                    let row = Math.floor(i / 5);
+                    let col = i % 5;
+                    let bx = layout.startX + col * (layout.bw + layout.gap);
+                    let by = layout.startY + row * (layout.bh + layout.gap);
+                    
+                    if (mouse.x >= bx && mouse.x <= bx + layout.bw && mouse.y >= by && mouse.y <= by + layout.bh) {
+                        selectedStartLevel = i + 1;
+                        sfx.playMenuClick();
+                        break;
+                    }
+                }
+                return;
+            }
+            
+            if (gameState === 'GAME_OVER') {
+                resetGame();
+                initLevel(level);
+                gameState = 'PLAYING';
+                return;
+            }
+
+            if (gameState === 'GAME_CLEARED') {
+                gameState = 'START_MENU';
+                return;
+            }
+            
+            if (gameState !== 'PLAYING') return;
+            if (isIntermission || fireCooldown > 0 || continuousLaserTimer > 0) return;
+
+            if (activeWeapon === 'LASER') {
+                fireLaser();
+                if (continuousLaserTimer <= 0) {
+                    fireCooldown = 30;
+                }
+            } else if (activeWeapon === 'MISSILE') {
+                if (missiles.length >= 80) return; 
+                fireMissile();
+                fireCooldown = 12; 
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            isMouseDown = false;
+        });
+
+        function getDistanceToLineSegment(px, py, x1, y1, x2, y2) {
+            let A = px - x1;
+            let B = py - y1;
+            let C = x2 - x1;
+            let D = y2 - y1;
+            let dot = A * C + B * D;
+            let len_sq = C * C + D * D;
+            let param = -1;
+            if (len_sq != 0) param = dot / len_sq;
+            let xx, yy;
+            if (param < 0) { xx = x1; yy = y1; } 
+            else if (param > 1) { xx = x2; yy = y2; } 
+            else { xx = x1 + param * C; yy = y1 + param * D; }
+            let dx = px - xx;
+            let dy = py - yy;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function getPodAngle() {
+            let dx = mouse.x - player.x;
+            let dy = mouse.y - (player.y - 20); 
+            return Math.atan2(dy, dx);
+        }
+
+        function triggerShotLogic() {
+            shotsFired++;
+            return (shotsFired % 3 === 0);
+        }
+
+        function fireMachineGun() {
+            sfx.playMG();
+            let startX = player.x;
+            let startY = player.y - 20;
+            let aimAngle = getPodAngle();
+            let speed = 25; 
+            let vx = Math.cos(aimAngle) * speed;
+            let vy = Math.sin(aimAngle) * speed;
+            
+            bullets.push({ 
+                x: startX, y: startY, 
+                startX: startX, startY: startY,
+                vx: vx, vy: vy 
+            });
+        }
+
+        function fireLaser() {
+            laserShotsFired++;
+            if (laserShotsFired % 10 === 0) {
+                continuousLaserTimer = 120; // 2 seconds
+                sfx.playLaser();
+            } else {
+                sfx.playLaser();
+                let isTriBeam = triggerShotLogic();
+                let startX = player.x;
+                let startY = player.y - 20;
+                let baseAimAngle = getPodAngle();
+                
+                let angles = isTriBeam ? [baseAimAngle - 0.08, baseAimAngle, baseAimAngle + 0.08] : [baseAimAngle];
+                
+                for (let aimAngle of angles) {
+                    let endX = startX + Math.cos(aimAngle) * 3000;
+                    let endY = startY + Math.sin(aimAngle) * 3000;
+                    
+                    for (let i = meteors.length - 1; i >= 0; i--) {
+                        let m = meteors[i];
+                        let dist = getDistanceToLineSegment(m.x, m.y, startX, startY, endX, endY);
+                        if (dist < m.radius + 15) { 
+                            if (m.invuln <= 0) destroyMeteor(i);
+                        }
+                    }
+                    lasers.push({ startX, startY, endX, endY, timer: 15, maxTimer: 15 });
+                }
+            }
+        }
+
+        function fireMissile() {
+            missileShotsFired++;
+            let startX = player.x;
+            let startY = player.y - 20;
+
+            if (missileShotsFired % 10 === 0) {
+                sfx.playTripleMissile();
+                let baseAngle = getPodAngle();
+                for (let i = 0; i < 5; i++) {
+                    let angleOffset = (Math.random() - 0.5) * 1.5;
+                    missiles.push({
+                        mode: 'HOMING',
+                        startX: startX, startY: startY,
+                        x: startX, y: startY,
+                        vx: Math.cos(baseAngle + angleOffset) * 10,
+                        vy: Math.sin(baseAngle + angleOffset) * 10,
+                        timer: 300, 
+                        path: [],
+                        targetObj: null,
+                        isSwarmChild: true
+                    });
+                }
+            } else {
+                let isCluster = triggerShotLogic();
+                if (isCluster) sfx.playTripleMissile();
+                else sfx.playMissile();
+
+                let targetX = mouse.x;
+                let targetY = mouse.y; 
+                let dx = targetX - startX;
+                let dy = targetY - startY;
+                let dist = Math.hypot(dx, dy);
+                
+                let framesToTarget = Math.max(5, Math.floor(dist / 30)); 
+
+                missiles.push({
+                    mode: 'TARGET',
+                    startX: startX, startY: startY,
+                    x: startX, y: startY,
+                    targetX: targetX, targetY: targetY,
+                    timer: framesToTarget, initialTimer: framesToTarget,
+                    path: [],
+                    isCluster: isCluster,
+                    hasSplit: false
+                });
+            }
+        }
+
+        function initLevel(lvl) {
+            level = lvl;
+            lives = maxLives;
+            maxLevelBudget = levelData[level].totalScore;
+            activeWeapon = 'MISSILE';
+            levelBudget = maxLevelBudget;
+            isIntermission = false;
+            intermissionTimer = 0;
+            levelFrames = 0;
+            meteors = [];
+            missiles = [];
+            lasers = [];
+            bullets = [];
+            currentContinuousBeam = null;
+        }
+
+        function resetGame() {
+            shotsFired = 0;
+            missileShotsFired = 0;
+            laserShotsFired = 0;
+            fireCooldown = 0;
+            continuousLaserTimer = 0;
+            currentContinuousBeam = null;
+            barrierFlash = 0;
+            missiles = [];
+            lasers = [];
+            bullets = [];
+            explosions = [];
+            particles = [];
+            meteors = [];
+            frameCount = 0;
+            levelFrames = 0;
+        }
+
+        function spawnMeteor(type, spawnX = null, spawnY = null, angle = null, speedMod = null, isFragment = false) {
+            let cost = type === 'xlarge' ? 12 : (type === 'large' ? 6 : (type === 'medium' ? 3 : 1));
+            if (spawnX === null && levelBudget < cost) return;
+            if (spawnX === null) levelBudget -= cost;
+
+            let radius = type === 'xlarge' ? 65 : (type === 'large' ? 40 : (type === 'medium' ? 24 : 12));
+            
+            let finalSpeed;
+            if (spawnX !== null && speedMod !== null) {
+                finalSpeed = speedMod;
+            } else {
+                let baseSpd = type === 'xlarge' ? 0.6 : (type === 'large' ? 0.8 : (type === 'medium' ? 1.2 : 1.8));
+                let randVari = type === 'xlarge' ? (Math.random() * 0.3) : (type === 'large' ? (Math.random() * 0.4) : (type === 'medium' ? (Math.random() * 0.5) : (Math.random() * 0.8)));
+                finalSpeed = (baseSpd + randVari) * levelData[level].speedMult;
+            }
+
+            let x = spawnX !== null ? spawnX : (width * 0.1 + Math.random() * (width * 0.8));
+            let y = spawnY !== null ? spawnY : -60;
+
+            let targetX = width/2 + (Math.random() - 0.5) * 150;
+            let targetY = height - 100;
+            let baseAngle = angle !== null ? angle : Math.atan2(targetY - y, targetX - x);
+            
+            let vx = Math.cos(baseAngle) * finalSpeed;
+            let vy = Math.sin(baseAngle) * finalSpeed;
+
+            let numPoints = (type === 'small' && isFragment) ? 3 : (7 + Math.floor(Math.random() * 5));
+            let points = [];
+            for(let i = 0; i < numPoints; i++) {
+                let a = (i / numPoints) * Math.PI * 2;
+                let r = radius * ((type === 'small' && isFragment) ? (0.4 + Math.random() * 0.6) : (0.7 + Math.random() * 0.3));
+                points.push({ angle: a, r: r });
+            }
+
+            meteors.push({
+                type: type,
+                x: x, y: y,
+                vx: vx, vy: vy,
+                speed: finalSpeed,
+                baseAngle: baseAngle,
+                radius: radius,
+                points: points,
+                rot: Math.random() * Math.PI * 2,
+                rotSpeed: (Math.random() - 0.5) * 0.05,
+                invuln: spawnX !== null ? 60 : 0 
+            });
+        }
+
+        function destroyMeteor(i) {
+            let m = meteors[i];
+            let expColor = m.type === 'xlarge' ? '#f44' : (m.type === 'large' ? '#fa0' : '#d80');
+            createExplosion(m.x, m.y, m.radius * 1.5, expColor);
+            meteors.splice(i, 1);
+            
+            if (m.type === 'xlarge') {
+                for(let j=0; j<2; j++) {
+                    let angleOffset = (j === 0 ? -0.2 : 0.2) + (Math.random() - 0.5) * 0.1;
+                    let spawnAngle = m.baseAngle + angleOffset;
+                    let spawnX = m.x + Math.cos(spawnAngle) * m.radius * 0.8;
+                    let spawnY = m.y + Math.sin(spawnAngle) * m.radius * 0.8;
+                    spawnMeteor('large', spawnX, spawnY, spawnAngle, m.speed, true);
+                }
+            } else if (m.type === 'large') {
+                for(let j=0; j<2; j++) {
+                    let angleOffset = (j === 0 ? -0.3 : 0.3) + (Math.random() - 0.5) * 0.1;
+                    let spawnAngle = m.baseAngle + angleOffset;
+                    let spawnX = m.x + Math.cos(spawnAngle) * m.radius * 0.8;
+                    let spawnY = m.y + Math.sin(spawnAngle) * m.radius * 0.8;
+                    spawnMeteor('medium', spawnX, spawnY, spawnAngle, m.speed, true);
+                }
+            } else if (m.type === 'medium') {
+                for(let j=0; j<2; j++) {
+                    let angleOffset = (j === 0 ? -0.4 : 0.4) + (Math.random() - 0.5) * 0.1;
+                    let spawnAngle = m.baseAngle + angleOffset;
+                    let spawnX = m.x + Math.cos(spawnAngle) * m.radius * 0.8;
+                    let spawnY = m.y + Math.sin(spawnAngle) * m.radius * 0.8;
+                    spawnMeteor('small', spawnX, spawnY, spawnAngle, m.speed, true);
+                }
+            }
+        }
+
+        function createExplosion(x, y, radius = 45, color = null) {
+            sfx.playExplosion(radius);
+            explosions.push({
+                x: x, y: y,
+                radius: 0,
+                maxRadius: radius + Math.random() * 15,
+                duration: 40, 
+                timer: 0,
+                color: color
+            });
+
+            for (let i = 0; i < 15; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    life: 20 + Math.random() * 20,
+                    color: color ? color : (i % 2 === 0 ? theme.fg : theme.trail),
+                    isFire: false
+                });
+            }
+        }
+
+        resize();
+        player = { x: width/2, y: height - 100 };
+        resetGame();
+
+        function drawUIMissile(x, y, w, h) {
+            let tipH = h * 0.35;
+            let bodyH = h - tipH;
+            ctx.fillRect(x - w/2, y + tipH, w, bodyH);
+            ctx.beginPath();
+            ctx.moveTo(x - w/2, y + tipH);
+            ctx.lineTo(x, y);
+            ctx.lineTo(x + w/2, y + tipH);
+            ctx.fill();
+            let oldFill = ctx.fillStyle;
+            ctx.fillStyle = theme.meteorLine;
+            ctx.fillRect(x - w/2, y + h - bodyH * 0.3, w, bodyH * 0.3);
+            ctx.fillStyle = oldFill;
+        }
+
+        function update() {
+            if (gameState === 'LOADING') {
+                loadTimer++;
+                if (loadTimer % 15 === 0) sfx.playInitTick();
+                if (loadTimer >= loadDuration) gameState = 'START_MENU';
+                return;
+            }
+
+            if (gameState !== 'PLAYING') return;
+            
+            frameCount++;
+            if (barrierFlash > 0) barrierFlash--;
+            if (fireCooldown > 0) fireCooldown--;
+
+            if (continuousLaserTimer > 0) {
+                continuousLaserTimer--;
+                if (continuousLaserTimer % 15 === 0) sfx.playLaser();
+                
+                let startX = player.x;
+                let startY = player.y - 20;
+                let aimAngle = getPodAngle();
+                let endX = startX + Math.cos(aimAngle) * 3000;
+                let endY = startY + Math.sin(aimAngle) * 3000;
+                
+                for (let i = meteors.length - 1; i >= 0; i--) {
+                    let m = meteors[i];
+                    let dist = getDistanceToLineSegment(m.x, m.y, startX, startY, endX, endY);
+                    if (dist < m.radius + 15) { 
+                        // Continuous laser bypasses invulnerability completely
+                        destroyMeteor(i);
+                    }
+                }
+                currentContinuousBeam = { startX, startY, endX, endY };
+            } else {
+                currentContinuousBeam = null;
+                if (isMouseDown && activeWeapon === 'MACHINE_GUN' && fireCooldown <= 0 && !isIntermission) {
+                    fireMachineGun();
+                    fireCooldown = 6; 
+                }
+            }
+
+            if (isIntermission) {
+                intermissionTimer--;
+                if (intermissionTimer <= 0) {
+                    if (level >= 10) {
+                        gameState = 'GAME_CLEARED';
+                    } else {
+                        initLevel(level + 1);
+                    }
+                }
+            } else {
+                levelFrames++;
+                if (levelBudget <= 0 && meteors.length === 0) {
+                    sfx.playLevelUp();
+                    isIntermission = true;
+                    intermissionTimer = 180; 
+                }
+            }
+
+            if (!isIntermission && levelBudget > 0) {
+                let conf = levelData[level];
+                if (conf.rates.small > 0 && frameCount % conf.rates.small === 0) spawnMeteor('small');
+                if (conf.rates.medium > 0 && frameCount % conf.rates.medium === 0) spawnMeteor('medium');
+                if (conf.rates.large > 0 && frameCount % conf.rates.large === 0) spawnMeteor('large');
+                if (conf.rates.xlarge && conf.rates.xlarge > 0 && frameCount % conf.rates.xlarge === 0) spawnMeteor('xlarge');
+            }
+
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                lasers[i].timer--;
+                if (lasers[i].timer <= 0) lasers.splice(i, 1);
+            }
+            
+            let maxRange = height / 2;
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.lastX = b.x;
+                b.lastY = b.y;
+                b.x += b.vx;
+                b.y += b.vy;
+                
+                let distTravelled = Math.hypot(b.x - b.startX, b.y - b.startY);
+                let detonated = false;
+                
+                if (distTravelled > maxRange || b.y < -100 || b.x < -100 || b.x > width + 100 || b.y > height + 100) {
+                    detonated = true;
+                } else {
+                    for (let j = meteors.length - 1; j >= 0; j--) {
+                        let m = meteors[j];
+                        let dist = getDistanceToLineSegment(m.x, m.y, b.lastX, b.lastY, b.x, b.y);
+                        
+                        if (dist < m.radius + 5) {
+                            if (m.invuln <= 0) {
+                                createExplosion(m.x, m.y, 25);
+                                destroyMeteor(j);
+                            }
+                            detonated = true;
+                            break;
+                        }
+                    }
+                }
+                if (detonated) bullets.splice(i, 1);
+            }
+            if (bullets.length > 200) bullets.shift(); 
+
+            let targetedMeteors = new Set();
+            for (let mx of missiles) {
+                if (mx.mode === 'HOMING' && mx.targetObj && meteors.includes(mx.targetObj)) {
+                    targetedMeteors.add(mx.targetObj);
+                }
+            }
+
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                let m = missiles[i];
+                
+                m.path.push({x: m.x, y: m.y});
+                if (m.path.length > 15) m.path.shift();
+
+                let detonated = false;
+
+                if (m.mode === 'HOMING') {
+                    if (m.targetObj && meteors.includes(m.targetObj)) {
+                        let targetAngle = Math.atan2(m.targetObj.y - m.y, m.targetObj.x - m.x);
+                        let currentAngle = Math.atan2(m.vy, m.vx);
+                        let angleDiff = targetAngle - currentAngle;
+                        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                        let turnSpeed = 0.2;
+                        if (angleDiff > turnSpeed) currentAngle += turnSpeed;
+                        else if (angleDiff < -turnSpeed) currentAngle -= turnSpeed;
+                        else currentAngle = targetAngle;
+                        let speed = 25; 
+                        m.vx = Math.cos(currentAngle) * speed;
+                        m.vy = Math.sin(currentAngle) * speed;
+                    } else {
+                        let minDist = Infinity;
+                        let target = null;
+                        
+                        for (let met of meteors) {
+                            if (!targetedMeteors.has(met)) {
+                                let dist = Math.hypot(met.x - m.x, met.y - m.y);
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    target = met;
+                                }
+                            }
+                        }
+                        
+                        if (!target) {
+                            minDist = Infinity;
+                            for (let met of meteors) {
+                                let dist = Math.hypot(met.x - m.x, met.y - m.y);
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    target = met;
+                                }
+                            }
+                        }
+                        
+                        m.targetObj = target;
+                        if (target) targetedMeteors.add(target);
+                    }
+                    m.x += m.vx;
+                    m.y += m.vy;
+                    m.timer--;
+
+                    if (m.timer <= 0) detonated = true;
+                    if (!detonated) {
+                        for (let j = meteors.length - 1; j >= 0; j--) {
+                            let met = meteors[j];
+                            let dist = Math.hypot(m.x - met.x, m.y - met.y);
+                            if (dist < met.radius + 15) {
+                                detonated = true;
+                                m.x = met.x; 
+                                m.y = met.y;
+                                break; 
+                            }
+                        }
+                    }
+                } else {
+                    m.timer--;
+                    let t = 1 - (m.timer / m.initialTimer);
+                    m.x = m.startX + (m.targetX - m.startX) * t;
+                    m.y = m.startY + (m.targetY - m.startY) * t;
+
+                    if (m.isCluster && !m.hasSplit && m.timer <= m.initialTimer * 0.5) {
+                        m.isCluster = false; 
+                        m.hasSplit = true;
+                        
+                        const spawnChild = (offsetX, offsetY) => {
+                            let childTargetX = m.targetX + offsetX;
+                            let childTargetY = m.targetY + offsetY;
+                            let childTimer = Math.max(5, m.timer); 
+                            missiles.push({
+                                mode: 'TARGET',
+                                startX: m.x, startY: m.y,
+                                x: m.x, y: m.y,
+                                targetX: childTargetX, targetY: childTargetY,
+                                timer: childTimer, initialTimer: childTimer,
+                                path: [...m.path], 
+                                isCluster: false,
+                                hasSplit: true
+                            });
+                        };
+                        spawnChild(-60, 20);
+                        spawnChild(60, 20);
+                    }
+
+                    if (m.timer <= 0) detonated = true;
+                    
+                    if (!detonated) {
+                        for (let j = meteors.length - 1; j >= 0; j--) {
+                            let met = meteors[j];
+                            let dist = Math.hypot(m.x - met.x, m.y - met.y);
+                            if (dist < met.radius + 15) {
+                                detonated = true;
+                                m.x = met.x; 
+                                m.y = met.y;
+                                break; 
+                            }
+                        }
+                    }
+                }
+
+                if (detonated) {
+                    createExplosion(m.x, m.y, 50, '#f00');
+                    missiles.splice(i, 1);
+                }
+            }
+
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                let e = explosions[i];
+                e.timer++;
+                if (e.timer < e.duration / 2) {
+                    e.radius = (e.timer / (e.duration / 2)) * e.maxRadius;
+                } else {
+                    e.radius = e.maxRadius - ((e.timer - e.duration / 2) / (e.duration / 2)) * e.maxRadius;
+                }
+                if (e.timer >= e.duration) explosions.splice(i, 1);
+            }
+
+            for (let i = meteors.length - 1; i >= 0; i--) {
+                let m = meteors[i];
+                if (m.invuln > 0) m.invuln--;
+                
+                m.x += m.vx; 
+                m.y += m.vy;
+                m.rot += m.rotSpeed;
+
+                // Despawn logic to clear memory cleanly offscreen completely
+                if (m.y > height + 200 || m.x < -300 || m.x > width + 300) {
+                    meteors.splice(i, 1);
+                    continue;
+                }
+
+                // Enhanced Atmospheric Fire Effect 
+                let isFiery = m.type === 'xlarge' || m.type === 'large' || m.y > (height - 100) / 2;
+                if (isFiery && frameCount % 2 === 0) {
+                    let pCount = m.type === 'xlarge' ? 12 : (m.type === 'large' ? 8 : (m.type === 'medium' ? 5 : 2));
+                    let maxLife = m.type === 'xlarge' ? 80 : (m.type === 'large' ? 60 : (m.type === 'medium' ? 45 : 25));
+                    let baseSize = m.type === 'xlarge' ? 24 : (m.type === 'large' ? 18 : (m.type === 'medium' ? 12 : 6));
+                    
+                    for(let k=0; k<pCount; k++) {
+                        let life = maxLife * (0.5 + Math.random() * 0.5);
+                        particles.push({
+                            x: m.x + (Math.random()-0.5) * m.radius,
+                            y: m.y + (Math.random()-0.5) * m.radius,
+                            vx: -m.vx * 0.5 + (Math.random()-0.5),
+                            vy: -m.vy * 0.5 + (Math.random()-0.5),
+                            life: life,
+                            maxLife: life,
+                            fireSize: baseSize,
+                            color: Math.random() > 0.5 ? '#f50' : '#fa0',
+                            isFire: true
+                        });
+                    }
+                }
+
+                let earthCenterY = height + earthRadius - 100;
+                let distToEarth = Math.hypot(m.x - width/2, m.y - earthCenterY);
+
+                if (distToEarth <= earthRadius + m.radius - 10) {
+                    lives--;
+                    barrierFlash = 30;
+                    createExplosion(m.x, m.y, 60, '#f50'); 
+                    meteors.splice(i, 1);
+                    if (lives <= 0) {
+                        sfx.playGameOver();
+                        gameState = 'GAME_OVER';
+                    }
+                    continue;
+                }
+
+                let destroyed = false;
+                for (let e of explosions) {
+                    let dist = Math.hypot(m.x - e.x, m.y - e.y);
+                    if (dist < e.radius + m.radius && m.invuln <= 0) {
+                        destroyed = true;
+                        break;
+                    }
+                }
+                if (destroyed) {
+                    destroyMeteor(i);
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                if (!p.isFire) p.vy += 0.2; 
+                p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = theme.bg;
+            ctx.fillRect(0, 0, width, height);
+
+            if (gameState === 'LOADING') {
+                let cx = width / 2;
+                let cy = height / 2 - 40;
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.strokeStyle = theme.fg;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, 80, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                let r1 = (loadTimer * 1.5) % 80;
+                let r2 = ((loadTimer + 40) * 1.5) % 80;
+                ctx.strokeStyle = theme.trail;
+                ctx.beginPath(); ctx.arc(0, 0, r1, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath(); ctx.arc(0, 0, r2, 0, Math.PI * 2); ctx.stroke();
+                
+                ctx.rotate(loadTimer * 0.1);
+                ctx.strokeStyle = theme.fg;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(80, 0);
+                ctx.stroke();
+                ctx.restore();
+
+                ctx.fillStyle = theme.fg;
+                ctx.textAlign = 'center';
+                ctx.font = '24px "Courier New"';
+                ctx.fillText('INITIALIZING', cx, cy + 120);
+                return; 
+            }
+
+            // Draw Stars
+            for(let s of stars) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            if (barrierFlash > 0 && gameState === 'PLAYING') {
+                ctx.save();
+                ctx.globalAlpha = barrierFlash / 40;
+                ctx.fillStyle = 'rgba(255, 50, 0, 0.2)';
+                ctx.fillRect(0, 0, width, height);
+                ctx.restore();
+            }
+
+            let earthCenterY = height + earthRadius - 100;
+
+            // Draw Cone anchored securely to Earth's core center point to clip perfectly with the horizon
+            ctx.beginPath();
+            ctx.moveTo(width/2, earthCenterY); 
+            ctx.lineTo(-width * 0.2, -100); 
+            ctx.lineTo(width * 1.2, -100);
+            ctx.closePath();
+            ctx.fillStyle = theme.cone;
+            ctx.fill();
+            ctx.strokeStyle = theme.coneLine;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw Earth
+            ctx.beginPath();
+            ctx.arc(width/2, earthCenterY, earthRadius, 0, Math.PI * 2);
+            ctx.fillStyle = theme.earth;
+            ctx.fill();
+            
+            // Draw Green Landmasses
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(width/2, earthCenterY, earthRadius, 0, Math.PI * 2);
+            ctx.clip(); 
+            
+            ctx.fillStyle = theme.land;
+            ctx.beginPath();
+            ctx.arc(width/2 - 250, earthCenterY - 150, 200, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(width/2 + 250, earthCenterY + 100, 250, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(width/2 + 100, earthCenterY - 300, 150, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Earth Outer Rim
+            ctx.beginPath();
+            ctx.arc(width/2, earthCenterY, earthRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = barrierFlash > 0 ? '#f00' : theme.earthLine;
+            ctx.lineWidth = barrierFlash > 0 ? 5 : 2;
+            if (barrierFlash > 0) ctx.shadowBlur = 15;
+            ctx.shadowColor = '#f00';
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Render visible dashed machine gun radius limit
+            if ((gameState === 'PLAYING' || gameState === 'PAUSED') && activeWeapon === 'MACHINE_GUN' && continuousLaserTimer <= 0) {
+                ctx.save();
+                ctx.strokeStyle = theme.mg;
+                ctx.globalAlpha = 0.3;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([15, 20]);
+                ctx.beginPath();
+                ctx.arc(width / 2, height - 120, height / 2, Math.PI, 0); 
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            let progress = Math.max(0, Math.min(1, (maxLevelBudget - levelBudget) / maxLevelBudget));
+            ctx.fillStyle = theme.mlrsBase;
+            ctx.fillRect(0, 0, width, 10);
+            ctx.fillStyle = theme.fg;
+            ctx.fillRect(0, 0, width * progress, 10);
+
+            // UI Elements
+            if (gameState === 'PLAYING' || gameState === 'PAUSED') {
+                // HP Bar
+                ctx.save();
+                ctx.translate(20, 25);
+                let hpBarWidth = 250;
+                let hpBarHeight = 18;
+                let segmentWidth = (hpBarWidth - (maxLives - 1) * 3) / maxLives;
+                ctx.fillStyle = theme.healthEmpty;
+                for (let i = 0; i < maxLives; i++) {
+                    ctx.fillRect(i * (segmentWidth + 3), 0, segmentWidth, hpBarHeight);
+                }
+                ctx.fillStyle = theme.healthFill;
+                for (let i = 0; i < lives; i++) {
+                    ctx.fillRect(i * (segmentWidth + 3), 0, segmentWidth, hpBarHeight);
+                }
+                ctx.restore();
+
+                // Weapon Selection Icons UI (Bottom Left)
+                ctx.save();
+                ctx.translate(45, height - 45); 
+
+                const weapons = [
+                    { id: 'MISSILE', name: '1', color: '#f00' },
+                    { id: 'LASER', name: '2', color: theme.laser },
+                    { id: 'MACHINE_GUN', name: '3', color: theme.mg }
+                ];
+
+                weapons.forEach((w, idx) => {
+                    let isSelected = activeWeapon === w.id;
+                    ctx.save();
+                    ctx.translate(idx * 70, 0);
+
+                    // Box Background
+                    ctx.strokeStyle = isSelected ? w.color : theme.trail;
+                    ctx.lineWidth = isSelected ? 3 : 2;
+                    ctx.fillStyle = isSelected ? 'rgba(255,255,255,0.1)' : theme.bg;
+                    ctx.beginPath();
+                    ctx.rect(-25, -25, 50, 50);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Icon Rendering
+                    ctx.scale(0.8, 0.8);
+                    if (w.id === 'MISSILE') {
+                        ctx.fillStyle = isSelected ? '#f00' : theme.trail;
+                        drawUIMissile(0, -10, 10, 24);
+                    } else if (w.id === 'LASER') {
+                        ctx.fillStyle = isSelected ? theme.laser : theme.trail;
+                        ctx.fillRect(-15, -6, 30, 8);
+                        ctx.fillStyle = '#fff';
+                        ctx.fillRect(-5, -4, 10, 4);
+                    } else if (w.id === 'MACHINE_GUN') {
+                        ctx.fillStyle = isSelected ? theme.mg : theme.trail;
+                        ctx.fillRect(-12, -8, 5, 16);
+                        ctx.fillRect(-2, -8, 5, 16);
+                        ctx.fillRect(8, -8, 5, 16);
+                        ctx.beginPath(); ctx.moveTo(-12, -8); ctx.lineTo(-9.5, -14); ctx.lineTo(-7, -8); ctx.fill();
+                        ctx.beginPath(); ctx.moveTo(-2, -8); ctx.lineTo(0.5, -14); ctx.lineTo(3, -8); ctx.fill();
+                        ctx.beginPath(); ctx.moveTo(8, -8); ctx.lineTo(10.5, -14); ctx.lineTo(13, -8); ctx.fill();
+                    }
+                    ctx.restore();
+
+                    // Keybind text
+                    ctx.fillStyle = theme.fg;
+                    ctx.font = '14px "Courier New"';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`[${w.name}]`, idx * 70, 40);
+                });
+
+                // Weapon Cooldown Bar Above Icons
+                ctx.translate(0, -45);
+                ctx.fillStyle = theme.trail;
+                ctx.fillRect(-25, 0, 190, 6);
+                if (continuousLaserTimer > 0) {
+                    let pct = continuousLaserTimer / 120; 
+                    ctx.fillStyle = theme.laser;
+                    ctx.fillRect(-25, 0, 190 * pct, 6);
+                } else if (fireCooldown > 0) {
+                    let cooldownMax = activeWeapon === 'MACHINE_GUN' ? 6 : (activeWeapon === 'LASER' ? 30 : 12);
+                    let pct = 1 - (fireCooldown / cooldownMax);
+                    ctx.fillStyle = activeWeapon === 'LASER' ? theme.laser : (activeWeapon === 'MACHINE_GUN' ? theme.mg : '#f00');
+                    ctx.fillRect(-25, 0, 190 * pct, 6);
+                } else {
+                    ctx.fillStyle = activeWeapon === 'LASER' ? theme.laser : (activeWeapon === 'MACHINE_GUN' ? theme.mg : '#f00');
+                    ctx.fillRect(-25, 0, 190, 6);
+                }
+                ctx.restore();
+
+                // Crosshair
+                let chSize = 15;
+                ctx.strokeStyle = continuousLaserTimer > 0 ? theme.laser : (activeWeapon === 'LASER' ? theme.laser : (activeWeapon === 'MACHINE_GUN' ? theme.mg : '#f00'));
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(mouse.x - chSize, mouse.y);
+                ctx.lineTo(mouse.x + chSize, mouse.y);
+                ctx.moveTo(mouse.x, mouse.y - chSize);
+                ctx.lineTo(mouse.x, mouse.y + chSize);
+                ctx.stroke();
+            }
+
+            for (let l of lasers) {
+                ctx.strokeStyle = theme.laser;
+                ctx.lineWidth = 15 * (l.timer / l.maxTimer); 
+                ctx.beginPath();
+                ctx.moveTo(l.startX, l.startY);
+                ctx.lineTo(l.endX, l.endY);
+                ctx.stroke();
+                
+                ctx.strokeStyle = '#fff'; 
+                ctx.lineWidth = 6 * (l.timer / l.maxTimer); 
+                ctx.beginPath();
+                ctx.moveTo(l.startX, l.startY);
+                ctx.lineTo(l.endX, l.endY);
+                ctx.stroke();
+            }
+
+            if (currentContinuousBeam) {
+                let l = currentContinuousBeam;
+                let intensity = 0.5 + Math.random() * 0.5;
+                ctx.strokeStyle = theme.laser;
+                ctx.lineWidth = 20 * intensity; 
+                ctx.beginPath();
+                ctx.moveTo(l.startX, l.startY);
+                ctx.lineTo(l.endX, l.endY);
+                ctx.stroke();
+                
+                ctx.strokeStyle = '#fff'; 
+                ctx.lineWidth = 10 * intensity; 
+                ctx.beginPath();
+                ctx.moveTo(l.startX, l.startY);
+                ctx.lineTo(l.endX, l.endY);
+                ctx.stroke();
+            }
+            
+            for (let b of bullets) {
+                ctx.strokeStyle = theme.mg;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                let len = 15;
+                let speed = Math.hypot(b.vx, b.vy);
+                let nx = b.vx / speed;
+                let ny = b.vy / speed;
+                ctx.moveTo(b.x - nx * len, b.y - ny * len);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+            }
+
+            // Draw Weapon Mount and Pod
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            
+            // Trapezoid Platform
+            ctx.fillStyle = theme.mlrsBase;
+            ctx.beginPath();
+            ctx.moveTo(-40, 0);       
+            ctx.lineTo(40, 0);        
+            ctx.lineTo(25, -20);      
+            ctx.lineTo(-25, -20);     
+            ctx.fill();
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.translate(0, -20);    
+            
+            let aimAngle = getPodAngle();
+            ctx.rotate(aimAngle);
+            ctx.fillStyle = theme.mlrsPod;
+            ctx.fillRect(-15, -15, 60, 30); 
+            
+            if (activeWeapon === 'LASER' || continuousLaserTimer > 0) {
+                ctx.fillStyle = theme.laser;
+                ctx.fillRect(-10, -10, 55, 20); 
+            } else if (activeWeapon === 'MACHINE_GUN') {
+                ctx.fillStyle = theme.mg;
+                ctx.fillRect(-10, -12, 55, 4);
+                ctx.fillRect(-10, 8, 55, 4);
+            } else {
+                ctx.fillStyle = '#111'; 
+                ctx.fillRect(-10, -12, 55, 4);
+                ctx.fillRect(-10, -2, 55, 4);
+                ctx.fillRect(-10, 8, 55, 4);
+            }
+            ctx.restore(); 
+
+            for (let m of missiles) {
+                if (m.path.length > 1) {
+                    ctx.strokeStyle = m.isCluster || m.isSwarmChild ? '#f00' : theme.trail; 
+                    ctx.lineWidth = m.isCluster ? 4 : 2; 
+                    ctx.beginPath();
+                    ctx.moveTo(m.path[0].x, m.path[0].y);
+                    for (let i = 1; i < m.path.length; i++) {
+                        ctx.lineTo(m.path[i].x, m.path[i].y);
+                    }
+                    ctx.stroke();
+                }
+                
+                ctx.save();
+                ctx.translate(m.x, m.y);
+                let mAngle = 0;
+                if (m.mode === 'HOMING') {
+                    mAngle = Math.atan2(m.vy, m.vx);
+                } else {
+                    mAngle = Math.atan2(m.targetY - m.startY, m.targetX - m.startX);
+                }
+                ctx.rotate(mAngle);
+                
+                let size = m.isCluster ? 1.5 : 1;
+                ctx.fillStyle = m.isCluster || m.isSwarmChild ? '#f00' : theme.fg;
+                ctx.fillRect(-6 * size, -2 * size, 10 * size, 4 * size);
+                ctx.beginPath();
+                ctx.moveTo(4 * size, -2 * size);
+                ctx.lineTo(10 * size, 0);
+                ctx.lineTo(4 * size, 2 * size);
+                ctx.fill();
+                
+                ctx.fillStyle = '#333';
+                ctx.fillRect(-6 * size, -4 * size, 3 * size, 8 * size);
+                ctx.restore();
+            }
+
+            // Draw particles (including fire) below main meteor bodies
+            for (let p of particles) {
+                ctx.fillStyle = p.color;
+                if (p.isFire) {
+                    let size = (p.life / p.maxLife) * p.fireSize; 
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, Math.max(0.1, size), 0, Math.PI*2);
+                    ctx.fill();
+                } else {
+                    ctx.fillRect(p.x, p.y, 2.5, 2.5);
+                }
+            }
+
+            for (let e of explosions) {
+                ctx.fillStyle = e.color ? e.color : (Math.random() > 0.5 ? theme.fg : theme.trail); 
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            for (let m of meteors) {
+                ctx.save();
+                ctx.translate(m.x, m.y);
+                ctx.rotate(m.rot);
+                
+                ctx.beginPath();
+                for(let i=0; i<m.points.length; i++) {
+                    let p = m.points[i];
+                    let px = Math.cos(p.angle) * p.r;
+                    let py = Math.sin(p.angle) * p.r;
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                
+                let grad = ctx.createRadialGradient(0, 0, m.radius*0.2, 0, 0, m.radius);
+                let col = m.type === 'xlarge' ? theme.meteorXLarge : (m.type === 'large' ? theme.meteorLarge : (m.type === 'medium' ? theme.meteorMedium : theme.meteorSmall));
+                grad.addColorStop(0, '#555');
+                grad.addColorStop(1, col);
+                
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = theme.meteorLine;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Draw simple craters
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                if (m.type !== 'small') {
+                    ctx.beginPath(); ctx.arc(m.radius*0.3, m.radius*0.2, m.radius*0.2, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(-m.radius*0.4, -m.radius*0.3, m.radius*0.25, 0, Math.PI*2); ctx.fill();
+                }
+                if (m.type === 'large' || m.type === 'xlarge') {
+                    ctx.beginPath(); ctx.arc(-m.radius*0.1, m.radius*0.5, m.radius*0.15, 0, Math.PI*2); ctx.fill();
+                }
+                if (m.type === 'xlarge') {
+                    ctx.beginPath(); ctx.arc(m.radius*0.4, -m.radius*0.5, m.radius*0.18, 0, Math.PI*2); ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            ctx.fillStyle = theme.fg;
+            ctx.font = '36px "Courier New"';
+            ctx.textAlign = 'center';
+            ctx.fillText(`LEVEL: ${level}/10`, width / 2, 45);
+
+            if (gameState === 'START_MENU') {
+                ctx.fillStyle = theme.overlay;
+                ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = theme.fg;
+                ctx.textAlign = 'center';
+                ctx.font = '50px "Courier New"';
+                ctx.fillText('METEOR DEFENSE', width / 2, height / 2 - 120);
+                
+                ctx.font = '20px "Courier New"';
+                ctx.fillStyle = theme.trail;
+                ctx.fillText(`Protect Earth from the incoming meteor shower.`, width / 2, height / 2 - 70);
+                
+                let layout = getMenuLayout();
+
+                ctx.font = '20px "Courier New"';
+                ctx.textAlign = 'center';
+                
+                for (let i = 0; i < 10; i++) {
+                    let row = Math.floor(i / 5);
+                    let col = i % 5;
+                    let bx = layout.startX + col * (layout.bw + layout.gap);
+                    let by = layout.startY + row * (layout.bh + layout.gap);
+                    
+                    let isHover = (mouse.x >= bx && mouse.x <= bx + layout.bw && mouse.y >= by && mouse.y <= by + layout.bh);
+                    
+                    if (selectedStartLevel === i + 1) {
+                        ctx.fillStyle = theme.fg;
+                        ctx.fillRect(bx, by, layout.bw, layout.bh);
+                        ctx.fillStyle = theme.bg;
+                    } else if (isHover) {
+                        ctx.fillStyle = theme.trail;
+                        ctx.fillRect(bx, by, layout.bw, layout.bh);
+                        ctx.fillStyle = theme.bg;
+                    } else {
+                        ctx.strokeStyle = theme.trail;
+                        ctx.strokeRect(bx, by, layout.bw, layout.bh);
+                        ctx.fillStyle = theme.trail;
+                    }
+                    ctx.fillText(`L-${i + 1}`, bx + layout.bw / 2, by + layout.bh / 2 + 6);
+                }
+
+                ctx.fillStyle = theme.fg;
+                if (Math.floor(Date.now() / 500) % 2 === 0) {
+                    ctx.fillText('PRESS [SPACE] OR [ENTER] TO LAUNCH', width / 2, layout.startY + 150);
+                }
+            } else if (gameState === 'PAUSED') {
+                ctx.fillStyle = theme.overlay;
+                ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = theme.fg;
+                ctx.textAlign = 'center';
+                ctx.font = '50px "Courier New"';
+                ctx.fillText('MISSION PAUSED', width / 2, height / 2);
+                ctx.font = '20px "Courier New"';
+                ctx.fillText(`PRESS 'P' TO RESUME`, width / 2, height / 2 + 50);
+                ctx.fillText(`PRESS 'ESC' TO ABORT`, width / 2, height / 2 + 80);
+            } else if (gameState === 'GAME_OVER') {
+                ctx.fillStyle = theme.overlay;
+                ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = theme.fg;
+                ctx.textAlign = 'center';
+                ctx.font = '50px "Courier New"';
+                ctx.fillText('EARTH DESTROYED', width / 2, height / 2 - 20);
+                ctx.fillStyle = theme.trail;
+                ctx.font = '20px "Courier New"';
+                ctx.fillText(`LEVEL REACHED: ${level}`, width / 2, height / 2 + 30);
+                ctx.fillStyle = theme.fg;
+                ctx.fillText('CLICK TO RETRY', width / 2, height / 2 + 70);
+                ctx.font = '16px "Courier New"';
+                ctx.fillText('[ESC] ABORT TO MENU', width / 2, height / 2 + 100);
+            } else if (gameState === 'GAME_CLEARED') {
+                ctx.fillStyle = theme.overlay;
+                ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = theme.fg;
+                ctx.textAlign = 'center';
+                ctx.font = '50px "Courier New"';
+                ctx.fillText('EARTH IS SAFE', width / 2, height / 2 - 20);
+                ctx.fillStyle = theme.trail;
+                ctx.font = '20px "Courier New"';
+                ctx.fillText(`ALL 10 LEVELS CLEARED`, width / 2, height / 2 + 30);
+                ctx.fillStyle = theme.fg;
+                ctx.fillText('CLICK TO RETURN TO MENU', width / 2, height / 2 + 70);
+            } else if (gameState === 'PLAYING' && isIntermission) {
+                ctx.fillStyle = theme.fg;
+                ctx.textAlign = 'center';
+                ctx.font = '40px "Courier New"';
+                ctx.fillText(`LEVEL ${level} COMPLETED`, width / 2, height / 2);
+                if (Math.floor(frameCount / 10) % 2 === 0) {
+                    ctx.font = '20px "Courier New"';
+                    ctx.fillText(`PREPARING NEXT WAVE...`, width / 2, height / 2 + 40);
+                }
+            }
+        }
+
+        function gameLoop() {
+            updateCursor();
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        gameLoop();
+    </script>
+</body>
+</html>
